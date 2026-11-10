@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FAST CASH - Admin Panel</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0f19;
+            --card-bg: #131b2e;
+            --card-border: rgba(255, 255, 255, 0.07);
+            --accent-color: #00e676;
+            --danger: #ff5252;
+            --warning: #ffab40;
+            --text-main: #ffffff;
+            --text-sub: #8c9ba8;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); padding: 20px; display: flex; justify-content: center; }
+        .admin-container { width: 100%; max-width: 600px; }
+        .header { display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 16px 20px; border-radius: 16px; border: 1px solid var(--card-border); margin-bottom: 20px; gap: 10px; }
+        .header h2 { font-size: 18px; color: var(--accent-color); }
+        .card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 16px; padding: 20px; margin-bottom: 20px; }
+        .card h3 { font-size: 15px; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 20px; }
+        .stat-box { background: rgba(255, 255, 255, 0.03); padding: 14px; border-radius: 12px; border: 1px solid var(--card-border); }
+        .stat-box h5 { font-size: 12px; color: var(--text-sub); }
+        .stat-box p { font-size: 20px; font-weight: bold; margin-top: 5px; color: var(--accent-color); }
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 430px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--card-border); }
+        th { color: var(--text-sub); font-weight: 600; }
+        .btn { background: var(--accent-color); color: #000; border: none; padding: 6px 12px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 11px; }
+        .btn-danger { background: var(--danger); color: #fff; }
+        .input-group { margin-bottom: 12px; }
+        .input-group label { display: block; font-size: 12px; color: var(--text-sub); margin-bottom: 4px; }
+        .input-field { width: 100%; background: rgba(0,0,0,0.2); border: 1px solid var(--card-border); padding: 10px; border-radius: 8px; color: #fff; outline: none; }
+        .input-field:focus { border-color: var(--accent-color); }
+        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%) translateY(-100px); background: var(--accent-color); color: #000; padding: 10px 20px; border-radius: 20px; font-weight: bold; font-size: 12px; transition: 0.3s; z-index: 1000; }
+        .toast.show { transform: translateX(-50%) translateY(0); }
+        .notice { color: var(--warning); font-size: 12px; line-height: 1.5; margin-top: 12px; }
+        @media (max-width: 420px) { body { padding: 12px; } .header { padding: 14px; } .header h2 { font-size: 15px; } .card { padding: 15px; } }
+    </style>
+</head>
+<body>
+    <div id="toast" class="toast">আপডেট সফল হয়েছে</div>
+    <div class="admin-container">
+        <div class="header">
+            <h2><i class="fa-solid fa-shield-halved"></i> FAST CASH Admin</h2>
+            <button class="btn btn-danger" onclick="resetData()">রিসেট ডাটা</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box"><h5>মোট ইউজার</h5><p id="totalUsersCount">1</p></div>
+            <div class="stat-box"><h5>পেন্ডিং উইথড্র</h5><p id="pendingWithdrawCount" style="color: var(--warning);">0 ৳</p></div>
+        </div>
+
+        <div class="card">
+            <h3><i class="fa-solid fa-gear"></i> গ্লোবাল সেটিংস ও বোনাস কন্ট্রোল</h3>
+            <div class="input-group"><label>রেফার বোনাস (টাকা)</label><input type="number" id="setReferBonus" class="input-field" value="50" min="0"></div>
+            <div class="input-group"><label>সর্বনিম্ন উইথড্র লিমিট</label><input type="number" id="setMinWithdraw" class="input-field" value="100" min="1"></div>
+            <button class="btn" onclick="saveSettings()">সেটিংস সেভ করুন</button>
+            <p class="notice">নোট: এই সেটিংস আপাতত শুধু এই ব্রাউজারে সংরক্ষিত হবে; Supabase-এ যাবে না।</p>
+        </div>
+
+        <div class="card">
+            <h3><i class="fa-solid fa-money-bill-transfer"></i> উইথড্র রিকোয়েস্ট লিস্ট</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead><tr><th>মেথড ও নম্বর</th><th>পরিমাণ</th><th>স্ট্যাটাস</th><th>অ্যাকশন</th></tr></thead>
+                    <tbody id="withdrawTableBody"></tbody>
+                </table>
+            </div>
+            <p class="notice">এই প্যানেলটি একই ব্রাউজারের LocalStorage-এর ডেটা দেখায়। অন্য ইউজারের ফোনের ডেটা বা Supabase-এর ডেটা এখানে দেখা যাবে না।</p>
+        </div>
+    </div>
+
+    <script>
+        const STORAGE_KEY = 'fast_cash_pro_user';
+        let userData = loadUserData();
+
+        function loadUserData() {
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {
+                    name: 'User', id: 587727, balance: 0, transactions: []
+                };
+            } catch (e) {
+                return { name: 'User', id: 587727, balance: 0, transactions: [] };
+            }
+        }
+
+        function initAdmin() {
+            document.getElementById('totalUsersCount').innerText = '1';
+            const settings = JSON.parse(localStorage.getItem('fast_cash_pro_admin_settings') || '{}');
+            if (settings.referBonus !== undefined) document.getElementById('setReferBonus').value = settings.referBonus;
+            if (settings.minWithdraw !== undefined) document.getElementById('setMinWithdraw').value = settings.minWithdraw;
+            renderWithdrawRequests();
+        }
+
+        function renderWithdrawRequests() {
+            const tbody = document.getElementById('withdrawTableBody');
+            tbody.innerHTML = '';
+            const outTransactions = (userData.transactions || []).filter(tx => tx.type === 'out');
+            if (!outTransactions.length) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-sub);">কোনো উইথড্র রিকোয়েস্ট নেই</td></tr>';
+                document.getElementById('pendingWithdrawCount').innerText = '0 ৳';
+                return;
+            }
+
+            let totalPendingAmt = 0;
+            outTransactions.forEach((tx, index) => {
+                const status = tx.status || 'Pending';
+                if (status === 'Pending') totalPendingAmt += Number(tx.amount) || 0;
+
+                const tr = document.createElement('tr');
+                const methodCell = document.createElement('td');
+                methodCell.textContent = tx.title || 'তথ্য নেই';
+                const amountCell = document.createElement('td');
+                const amountBold = document.createElement('b');
+                amountBold.textContent = `${Number(tx.amount) || 0} ৳`;
+                amountCell.appendChild(amountBold);
+                const statusCell = document.createElement('td');
+                statusCell.textContent = status;
+                statusCell.style.color = status === 'Paid' ? 'var(--accent-color)' : 'var(--warning)';
+                const actionCell = document.createElement('td');
+
+                if (status !== 'Paid') {
+                    const paidButton = document.createElement('button');
+                    paidButton.className = 'btn';
+                    paidButton.textContent = 'Paid';
+                    paidButton.addEventListener('click', () => approveTx(index));
+                    actionCell.appendChild(paidButton);
+                } else {
+                    actionCell.textContent = 'সম্পন্ন';
+                }
+
+                tr.append(methodCell, amountCell, statusCell, actionCell);
+                tbody.appendChild(tr);
+            });
+            document.getElementById('pendingWithdrawCount').innerText = totalPendingAmt + ' ৳';
+        }
+
+        function approveTx(index) {
+            const outTransactions = (userData.transactions || []).filter(tx => tx.type === 'out');
+            const target = outTransactions[index];
+            if (!target) return;
+            if (!confirm('আপনি কি নিশ্চিত যে টাকা পাঠানো হয়েছে?')) return;
+            const mainIndex = userData.transactions.indexOf(target);
+            if (mainIndex !== -1) {
+                userData.transactions[mainIndex].status = 'Paid';
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(userData));
+                renderWithdrawRequests();
+                showToast('স্ট্যাটাস Paid করা হয়েছে। টাকা স্বয়ংক্রিয়ভাবে পাঠানো হয়নি।');
+            }
+        }
+
+        function saveSettings() {
+            const referBonus = Number(document.getElementById('setReferBonus').value);
+            const minWithdraw = Number(document.getElementById('setMinWithdraw').value);
+            if (!Number.isFinite(referBonus) || referBonus < 0 || !Number.isFinite(minWithdraw) || minWithdraw < 1) {
+                showToast('সঠিক সেটিংস লিখুন');
+                return;
+            }
+            localStorage.setItem('fast_cash_pro_admin_settings', JSON.stringify({ referBonus, minWithdraw }));
+            showToast('এই ব্রাউজারে সেটিংস সেভ হয়েছে');
+        }
+
+        function resetData() {
+            if (confirm('এই ব্রাউজারের FAST CASH ইউজার ডাটা মুছে ফেলবেন? এটি ফেরত আনা যাবে না।')) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            toast.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 2500);
+        }
+
+        window.onload = initAdmin;
+    </script>
+</body>
+</html>
